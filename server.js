@@ -1,111 +1,87 @@
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { v4: uuidv4 } = require("uuid");
+const low = require("lowdb");
+const FileSync = require("lowdb/adapters/FileSync");
 
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const jwt = require('jsonwebtoken');
 const app = express();
-const PORT = process.env.PORT || 'mysecretkey';
-const SECRET = process.env.JWT_SECRET;
+const adapter = new FileSync("db.json");
+const db = low(adapter);
+
+// Initial DB setup
+db.defaults({ users: [] }).write();
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey";
 
-// ===== In-memory DB =====
-let users = []; // {id, username, password}
-let posts = []; // {id, userId, username, content}
+// ======= REGISTER =======
+app.post("/register", async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
-// ===== Auth Middleware =====
-function authMiddleware(req, res, next){                                                                                                                                                const auth = req.headers['authorization'];
-    if(!auth) return res.status(401).json({error:'No token'});
-    const token = auth.split(' ')[1];
-    try{
-        const data = jwt.verify(token, SECRET);
-        req.user = data;
-        next();
-    } catch(e){ res.status(401).json({error:'Invalid token'}); }
-}
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
 
-// ===== Register/Login =====
-app.post('/register', (req,res)=>{
-    const {username,password} = req.body;
-    if(!username || !password) return res.status(400).json({error:'Provide username & password'});
-    if(users.find(u=>u.username===username)) return res.status(400).json({error:'User exists'});
-    const id = Date.now().toString();
-    users.push({id, username, password});
-    res.json({message:'Registered!'});
+    const existingUser = db.get("users").find({ username }).value();
+    if (existingUser) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = { id: uuidv4(), username, password: hashedPassword };
+    db.get("users").push(newUser).write();
+
+    res.json({ message: "User registered successfully" });
+  } catch (err) {
+    console.error("Register Error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.post('/login', (req,res)=>{
-    const {username,password} = req.body;
-    const user = users.find(u=>u.username===username && u.password===password);
-    if(!user) return res.status(400).json({error:'Invalid credentials: No such account or password is incorrect!!'});
-    const token = jwt.sign({id:user.id, username:user.username}, SECRET);
-    res.json({token});
+// ======= LOGIN =======
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
+
+    const user = db.get("users").find({ username }).value();
+    if (!user) {
+      return res.status(400).json({ error: "User not found" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.json({ message: "Login successful", token });
+  } catch (err) {
+    console.error("Login Error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.get('/me', authMiddleware, (req,res)=>{
-    const user = users.find(u=>u.id===req.user.id);
-    if(!user) return res.status(404).json({error:'User not found'});
-    res.json({id:user.id, username:user.username});
+// ======= TEST ROUTE =======
+app.get("/", (req, res) => {
+  res.send("AsirNet Backend is Running 🚀");
 });
 
-
-// ===== Get all users (safe version) =====
-app.get('/users', (req, res) => {
-    const safeUsers = users.map(u => ({
-        id: u.id,
-        username: u.username
-    }));
-    res.json(safeUsers);
+// Start server
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });
-
-// ===== Users Update/Delete =====
-app.put('/users/:id', authMiddleware, (req,res)=>{
-    if(req.params.id!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    const user = users.find(u=>u.id===req.user.id);
-    if(!user) return res.status(404).json({error:'User not found'});
-    if(req.body.username) user.username = req.body.username;
-    if(req.body.password) user.password = req.body.password;
-    res.json({message:'Yoir Account Updated'});
-});
-
-app.delete('/users/:id', authMiddleware, (req,res)=>{
-    if(req.params.id!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    users = users.filter(u=>u.id!==req.user.id);
-    posts = posts.filter(p=>p.userId!==req.user.id);
-    res.json({message:'Deleted'});
-});
-
-// ===== Posts =====
-app.get('/posts', (req,res)=>{
-    res.json(posts);
-});
-
-app.post('/posts', authMiddleware, (req,res)=>{
-    const {content} = req.body;
-    if(!content) return res.status(400).json({error:'No content'});
-    const post = {id:Date.now().toString(), userId:req.user.id, username:req.user.username, content};
-    posts.push(post);
-    res.json(post);
-});
-
-app.put('/posts/:id', authMiddleware, (req,res)=>{
-    const post = posts.find(p=>p.id===req.params.id);
-    if(!post) return res.status(404).json({error:'Post not found'});
-    if(post.userId!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    if(req.body.content) post.content=req.body.content;
-    res.json(post);
-});
-
-app.delete('/posts/:id', authMiddleware, (req,res)=>{
-    const post = posts.find(p=>p.id===req.params.id);
-    if(!post) return res.status(404).json({error:'Post not found'});
-    if(post.userId!==req.user.id) return res.status(403).json({error:'Forbidden'});
-    posts = posts.filter(p=>p.id!==req.params.id);
-    res.json({message:'Post deleted'});
-});
-
-
-
-app.listen(PORT, ()=>console.log(`Server running at http://localhost:${PORT}`));
