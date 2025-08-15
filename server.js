@@ -6,9 +6,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors({
-    origin:"https://7930navid.github.io/asirnet"
-}));
+app.use(cors());
 app.use(bodyParser.json());
 
 const SECRET = 'asirnetsecret';
