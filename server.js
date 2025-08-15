@@ -4,7 +4,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 'mysecretkey';
 const SECRET = process.env.JWT_SECRET;
 
 app.use(cors());
