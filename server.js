@@ -5,11 +5,11 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 3000;
+const SECRET = process.env.JWT_SECRET;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-const SECRET = 'asirnetsecret';
 
 // ===== In-memory DB =====
 let users = []; // {id, username, password}
@@ -108,5 +108,4 @@ app.delete('/posts/:id', authMiddleware, (req,res)=>{
 
 
 
-const SECRET = process.env.JWT_SECRET;
 app.listen(PORT, ()=>console.log(`Server running at http://localhost:${PORT}`));
