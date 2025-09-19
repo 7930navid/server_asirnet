@@ -1,230 +1,186 @@
-const express = require("express");
-const cors = require("cors");
-const jwt = require("jsonwebtoken");
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
+import pkg from "pg";
+
+const { Pool } = pkg;
 
 const app = express();
+app.use(bodyParser.json());
+app.use(cors());
 
-/**
- * Render/railway/vercel style: platform দেয় PORT env var.
- * লোকালি চালালে 3000, Render-এ স্বয়ংক্রিয়ভাবে their PORT (log-এ 10000 দেখা যায়)।
- */
-const PORT = process.env.PORT || 3000;
+// 🔹 Database connection (Render বা local থেকে ENV variable ব্যবহার করবে)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL, // Render এ DATABASE_URL env var দিতে হবে
+  ssl: { rejectUnauthorized: false }, // Render এ SSL লাগে
+});
 
-/**
- * JWT secret অবশ্যই সেট করবে env-এ:
- *   JWT_SECRET=mysecretkey
- * dev/test-এ fallback রাখা হলো যেন লোকালি রান হয়।
- */
-const JWT_SECRET = process.env.JWT_SECRET || "dev-only-change-me";
+// 🔹 প্রথমবার টেবিল বানানো
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      bio TEXT
+    )
+  `);
 
-/** Core middlewares */
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-
-/** In-memory "DB" (server restart হলে ডেটা মুছে যাবে) */
-let users = []; // { id, username, password }
-let posts = []; // { id, userId, username, content }
-
-/** Helper: uniform JSON error */
-function sendError(res, code, message) {
-  return res.status(code).json({ error: message });
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL,
+      email TEXT NOT NULL,
+      text TEXT NOT NULL
+    )
+  `);
 }
 
-/** Auth middleware */
-function verifyToken(req, res, next) {
-  const authHeader = req.headers["authorization"] || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token) return sendError(res, 401, "No token provided");
+// 🔹 Register
+app.post("/register", async (req, res) => {
+  const { username, email, password, bio } = req.body;
+  if (!username || !email || !password || !bio)
+    return res.status(400).json({ message: "Please fill all fields" });
 
-  jwt.verify(token, JWT_SECRET, (err, payload) => {
-    if (err) return sendError(res, 403, "Invalid or expired token");
-    req.user = payload; // { id, username }
-    next();
-  });
-}
-
-/** Health / root (frontend ‘/’ এ হিট করলে JSON পাওয়া যাবে) */
-app.get("/", (req, res) => {
-  res.json({
-    ok: true,
-    service: "asirnet-backend",
-    users: users.length,
-    posts: posts.length,
-  });
-});
-
-/** ---------- Auth ---------- */
-
-/** Register */
-app.post("/register", (req, res) => {
   try {
-    const { username, password } = req.body || {};
-    if (!username || !password)
-      return sendError(res, 400, "Provide username & password");
+    const exists = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+    if (exists.rows.length > 0)
+      return res.status(400).json({ message: "User already exists" });
 
-    const exists = users.find((u) => u.username === username);
-    if (exists) return sendError(res, 400, "User exists");
-
-    const id = Date.now().toString();
-    users.push({ id, username, password });
-    res.json({ message: "Registered!" });
-  } catch (e) {
-    console.error("Register error:", e);
-    sendError(res, 500, "Server error");
-  }
-});
-
-/** Login */
-app.post("/login", (req, res) => {
-  try {
-    const { username, password } = req.body || {};
-    if (!username || !password)
-      return sendError(res, 400, "Provide username & password");
-
-    const user = users.find(
-      (u) => u.username === username && u.password === password
+    await pool.query(
+      "INSERT INTO users (username, email, password, bio) VALUES ($1, $2, $3, $4)",
+      [username, email, password, bio]
     );
-    if (!user)
-      return sendError(
-        res,
-        400,
-        "Invalid credentials: No such account or wrong password"
-      );
+    res.json({ message: "Registered successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error registering user", error: err.message });
+  }
+});
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username },
-      JWT_SECRET,
-      { expiresIn: "7d" }
+// 🔹 Login
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ message: "Please fill all fields" });
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE email=$1 AND password=$2",
+      [email, password]
     );
+    if (result.rows.length === 0)
+      return res.status(401).json({ message: "Invalid email or password" });
 
-    res.json({ token });
-  } catch (e) {
-    console.error("Login error:", e);
-    sendError(res, 500, "Server error");
+    res.json({ message: "Login successful", user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ message: "Error logging in", error: err.message });
   }
 });
 
-/** Current user */
-app.get("/me", verifyToken, (req, res) => {
-  const me = users.find((u) => u.id === req.user.id);
-  if (!me) return sendError(res, 404, "User not found");
-  res.json({ id: me.id, username: me.username });
-});
+// 🔹 Create Post
+app.post("/post", async (req, res) => {
+  const { user, text } = req.body;
+  if (!text) return res.status(400).json({ message: "Please write a post first" });
 
-/** ---------- Users (safe) ---------- */
-
-/** List all users (safe) */
-app.get("/users", (req, res) => {
-  const safe = users.map((u) => ({ id: u.id, username: u.username }));
-  res.json(safe);
-});
-
-/** Update my account */
-app.put("/users/:id", verifyToken, (req, res) => {
   try {
-    const { id } = req.params;
-    if (id !== req.user.id) return sendError(res, 403, "Forbidden");
+    const u = await pool.query("SELECT * FROM users WHERE username=$1", [user]);
+    if (u.rows.length === 0) return res.status(400).json({ message: "User not found" });
 
-    const me = users.find((u) => u.id === id);
-    if (!me) return sendError(res, 404, "User not found");
-
-    const { username, password } = req.body || {};
-    if (username) me.username = username;
-    if (password) me.password = password;
-
-    res.json({ message: "Your account updated" });
-  } catch (e) {
-    console.error("Update user error:", e);
-    sendError(res, 500, "Server error");
+    await pool.query("INSERT INTO posts (username, email, text) VALUES ($1, $2, $3)", [
+      u.rows[0].username,
+      u.rows[0].email,
+      text,
+    ]);
+    res.json({ message: "Post Created" });
+  } catch (err) {
+    res.status(500).json({ message: "Error creating post", error: err.message });
   }
 });
 
-/** Delete my account */
-app.delete("/users/:id", verifyToken, (req, res) => {
+// 🔹 Get all posts
+app.get("/post", async (req, res) => {
   try {
-    const { id } = req.params;
-    if (id !== req.user.id) return sendError(res, 403, "Forbidden");
-
-    users = users.filter((u) => u.id !== id);
-    posts = posts.filter((p) => p.userId !== id);
-    res.json({ message: "Deleted" });
-  } catch (e) {
-    console.error("Delete user error:", e);
-    sendError(res, 500, "Server error");
+    const posts = await pool.query("SELECT * FROM posts ORDER BY id DESC");
+    res.json(posts.rows);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching posts", error: err.message });
   }
 });
 
-/** ---------- Posts ---------- */
+// 🔹 Edit Profile
+app.put("/editprofile", async (req, res) => {
+  const { email, username, password, bio } = req.body;
+  if (!email || !username || !password || !bio)
+    return res.status(400).json({ message: "Please fill all fields" });
 
-/** Get all posts (public) */
-app.get("/posts", (req, res) => {
-  res.json(posts);
-});
-
-/** Create post (auth) */
-app.post("/posts", verifyToken, (req, res) => {
   try {
-    const { content } = req.body || {};
-    if (!content) return sendError(res, 400, "No content");
+    const result = await pool.query("UPDATE users SET username=$1, password=$2, bio=$3 WHERE email=$4 RETURNING *", [
+      username,
+      password,
+      bio,
+      email,
+    ]);
+    if (result.rowCount === 0) return res.status(404).json({ message: "User not found" });
 
-    const post = {
-      id: Date.now().toString(),
-      userId: req.user.id,
-      username: req.user.username,
-      content,
-    };
-    posts.push(post);
-    res.json(post);
-  } catch (e) {
-    console.error("Create post error:", e);
-    sendError(res, 500, "Server error");
+    res.json({ message: "Profile updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating profile", error: err.message });
   }
 });
 
-/** Update my post */
-app.put("/posts/:id", verifyToken, (req, res) => {
+// 🔹 Delete User (+ posts)
+app.delete("/deleteuser/:email", async (req, res) => {
+  const { email } = req.params;
   try {
-    const { id } = req.params;
-    const post = posts.find((p) => p.id === id);
-    if (!post) return sendError(res, 404, "Post not found");
-    if (post.userId !== req.user.id) return sendError(res, 403, "Forbidden");
+    await pool.query("DELETE FROM posts WHERE email=$1", [email]);
+    const result = await pool.query("DELETE FROM users WHERE email=$1", [email]);
 
-    const { content } = req.body || {};
-    if (content) post.content = content;
-
-    res.json(post);
-  } catch (e) {
-    console.error("Update post error:", e);
-    sendError(res, 500, "Server error");
+    if (result.rowCount > 0) res.json({ message: `${email} has been deleted` });
+    else res.status(404).json({ message: "User not found" });
+  } catch (err) {
+    res.status(500).json({ message: "Error deleting user", error: err.message });
   }
 });
 
-/** Delete my post */
-app.delete("/posts/:id", verifyToken, (req, res) => {
+// 🔹 Fetch all users
+app.get("/users", async (req, res) => {
   try {
-    const { id } = req.params;
-    const post = posts.find((p) => p.id === id);
-    if (!post) return sendError(res, 404, "Post not found");
-    if (post.userId !== req.user.id) return sendError(res, 403, "Forbidden");
-
-    posts = posts.filter((p) => p.id !== id);
-    res.json({ message: "Post deleted" });
-  } catch (e) {
-    console.error("Delete post error:", e);
-    sendError(res, 500, "Server error");
+    const users = await pool.query("SELECT * FROM users");
+    res.json(users.rows);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching users", error: err.message });
   }
 });
 
-/** 404 handler (JSON) */
-app.use((req, res) => sendError(res, 404, "Route not found"));
-
-/** Global error handler (JSON) */
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  sendError(res, 500, "Server error");
+// 🔹 Delete Post
+app.delete("/post/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query("DELETE FROM posts WHERE id=$1", [id]);
+    if (result.rowCount > 0) res.json({ message: "Post deleted successfully" });
+    else res.status(404).json({ message: "Post not found" });
+  } catch (err) {
+    res.status(500).json({ message: "Error deleting post", error: err.message });
+  }
 });
 
-/** Start server */
-app.listen(PORT, () =>
-  console.log(`Server running at http://localhost:${PORT}`)
-);
+// 🔹 Edit Post
+app.put("/post/:id", async (req, res) => {
+  const { id } = req.params;
+  const { text } = req.body;
+  try {
+    const result = await pool.query("UPDATE posts SET text=$1 WHERE id=$2 RETURNING *", [text, id]);
+    if (result.rowCount === 0) return res.status(404).json({ message: "Post not found" });
+
+    res.json({ message: "Post updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating post", error: err.message });
+  }
+});
+
+// 🔹 Start Server
+app.listen(3000, async () => {
+  await initDB();
+  console.log("✅ Server running on http://localhost:3000");
+});
