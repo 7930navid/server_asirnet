@@ -9,13 +9,13 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-// 🔹 Database connection (Render বা local থেকে ENV variable ব্যবহার করবে)
+// 🔹 PostgreSQL connection (Render DATABASE_URL ব্যবহার করবে)
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL, // Render এ DATABASE_URL env var দিতে হবে
-  ssl: { rejectUnauthorized: false }, // Render এ SSL লাগে
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }, // Render এ SSL দরকার
 });
 
-// 🔹 প্রথমবার টেবিল বানানো
+// 🔹 টেবিল বানানো (প্রথম deploy এ run হবে)
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -115,12 +115,10 @@ app.put("/editprofile", async (req, res) => {
     return res.status(400).json({ message: "Please fill all fields" });
 
   try {
-    const result = await pool.query("UPDATE users SET username=$1, password=$2, bio=$3 WHERE email=$4 RETURNING *", [
-      username,
-      password,
-      bio,
-      email,
-    ]);
+    const result = await pool.query(
+      "UPDATE users SET username=$1, password=$2, bio=$3 WHERE email=$4 RETURNING *",
+      [username, password, bio, email]
+    );
     if (result.rowCount === 0) return res.status(404).json({ message: "User not found" });
 
     res.json({ message: "Profile updated successfully" });
@@ -129,7 +127,7 @@ app.put("/editprofile", async (req, res) => {
   }
 });
 
-// 🔹 Delete User (+ posts)
+// 🔹 Delete User + posts
 app.delete("/deleteuser/:email", async (req, res) => {
   const { email } = req.params;
   try {
@@ -179,11 +177,11 @@ app.put("/post/:id", async (req, res) => {
   }
 });
 
-// 🔹 Start Server (Render-ready)
+// 🔹 Start Server
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
-  await initDB(); // PostgreSQL টেবিল তৈরি
+  await initDB(); // PostgreSQL টেবিল create
   app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
   });
