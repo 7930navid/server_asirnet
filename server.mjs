@@ -179,8 +179,14 @@ app.put("/post/:id", async (req, res) => {
   }
 });
 
-// 🔹 Start Server
-app.listen(3000, async () => {
-  await initDB();
-  console.log("✅ Server running on http://localhost:3000");
-});
+// 🔹 Start Server (Render-ready)
+const PORT = process.env.PORT || 3000;
+
+async function startServer() {
+  await initDB(); // PostgreSQL টেবিল তৈরি
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on port ${PORT}`);
+  });
+}
+
+startServer();
