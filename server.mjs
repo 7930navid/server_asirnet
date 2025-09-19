@@ -180,7 +180,7 @@ app.put("/post/:id", async (req, res) => {
 });
 
 // 🔹 Start Server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 async function startServer() {
   await initDB(); // PostgreSQL টেবিল create
