@@ -7,7 +7,9 @@ const { Pool } = pkg;
 
 const app = express();
 app.use(bodyParser.json());
-app.use(cors());
+app.use(cors({
+  origin: "https://7930navid.github.io"
+}));
 
 // 🔹 PostgreSQL connection (Render DATABASE_URL ব্যবহার করবে)
 const pool = new Pool({
