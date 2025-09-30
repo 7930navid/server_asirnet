@@ -38,7 +38,7 @@ async function initDB() {
 }
 
 // 🔹 Register
-app.post("/register", async (req, res) => {
+app.post("/signup", async (req, res) => {
   const { username, email, password, bio } = req.body;
   if (!username || !email || !password || !bio)
     return res.status(400).json({ message: "Please fill all fields" });
@@ -59,7 +59,7 @@ app.post("/register", async (req, res) => {
 });
 
 // 🔹 Login
-app.post("/login", async (req, res) => {
+app.post("/signin", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
     return res.status(400).json({ message: "Please fill all fields" });
