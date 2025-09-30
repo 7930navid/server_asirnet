@@ -1,11 +1,10 @@
 {
-  "name": "my-sql-app",
+  "name": "AsirNet",
   "version": "1.0.0",
   "description": "Express + PostgreSQL backend",
   "main": "server.mjs",
-  "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
