@@ -2,7 +2,7 @@
   "name": "AsirNet",
   "version": "1.0.0",
   "description": "Express + PostgreSQL backend",
-  "main": "server.mjs",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
