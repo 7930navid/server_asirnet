@@ -5,9 +5,11 @@ const { Pool } = require("pg");
 
 const app = express();
 app.use(bodyParser.json());
+
 app.use(cors({
-  origin: "https://7930navid.github.io"
+  origin: ["https://7930navid.github.io", "http://localhost:8080"]
 }));
+
 
 // 🔹 PostgreSQL connection (Render DATABASE_URL ব্যবহার করবে)
 const pool = new Pool({
