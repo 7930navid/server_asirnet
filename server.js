@@ -192,6 +192,41 @@ async function startServer() {
     console.log(`✅ Server running on port ${PORT}`);
   });
 }
+
+// 🔹 Edit Post by Email + Index
+app.put("/post/:email/:index", async (req, res) => {
+  const { email, index } = req.params;
+  const { text } = req.body;
+
+  try {
+    // ওই ইউজারের সব পোস্ট আনো (id ascending অনুযায়ী)
+    const userPosts = await pool.query(
+      "SELECT * FROM posts WHERE email=$1 ORDER BY id ASC",
+      [email]
+    );
+
+    if (userPosts.rows.length === 0) {
+      return res.status(404).json({ message: "No posts found for this user" });
+    }
+
+    // index থেকে post নির্ধারণ করা
+    const post = userPosts.rows[index];
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // update করা
+    await pool.query("UPDATE posts SET text=$1 WHERE id=$2", [text, post.id]);
+
+    res.json({ message: "Post updated successfully!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error updating post", error: err.message });
+  }
+});
+
+// 🔹 Server run
+
 app.get("/", (req, res) => {
   res.json({ message: "Backend is working ✅" });
 });
