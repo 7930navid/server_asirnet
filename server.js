@@ -176,6 +176,10 @@ app.put("/post/:id", async (req, res) => {
     res.status(500).json({ message: "Error updating post", error: err.message });
   }
 });
+// 🔹 Server connection check
+app.get('/connect', (req,res) => {
+        res.send('Connected to server successfully!');
+});
 
 // 🔹 Start Server
 const PORT = process.env.PORT || 5000;
