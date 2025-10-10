@@ -225,6 +225,37 @@ app.put("/post/:email/:index", async (req, res) => {
   }
 });
 
+// 🔹 Delete Post by Email + Index
+app.delete("/post/:email/:index", async (req, res) => {
+  const { email, index } = req.params;
+
+  try {
+    // ইউজারের সব পোস্ট আনো (id ascending অনুযায়ী)
+    const userPosts = await pool.query(
+      "SELECT * FROM posts WHERE email=$1 ORDER BY id ASC",
+      [email]
+    );
+
+    if (userPosts.rows.length === 0) {
+      return res.status(404).json({ message: "No posts found for this user" });
+    }
+
+    // নির্দিষ্ট index এর post বের করো
+    const post = userPosts.rows[index];
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    // post delete করো
+    await pool.query("DELETE FROM posts WHERE id=$1", [post.id]);
+
+    res.json({ message: "Post deleted successfully!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error deleting post", error: err.message });
+  }
+});
+
 // 🔹 Server run
 
 app.get("/", (req, res) => {
