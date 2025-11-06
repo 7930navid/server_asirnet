@@ -13,7 +13,7 @@ app.use(cors({
 
 // 🔹 PostgreSQL connection (Render DATABASE_URL ব্যবহার করবে)
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DB_URL,
   ssl: { rejectUnauthorized: false }, // Render এ SSL দরকার
 });
 
