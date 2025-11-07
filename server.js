@@ -24,16 +24,16 @@ const pool = new Pool({
 
 // 🔹 Initialize DB
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      bio TEXT,
-      avatar TEXT
-    )
-  `);
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    bio TEXT,
+    avatar TEXT
+  )
+`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS posts (
