@@ -23,7 +23,7 @@ const pool = new Pool({
 });
 
 // 🔹 Initialize DB
-async function dropTables() {
+async function initDB() {
   await pool.query(`DROP TABLE IF EXISTS users;`);
   await pool.query(`DROP TABLE IF EXISTS posts;`);
 }
