@@ -49,30 +49,37 @@ async function initDB() {
 // 🔹 Signup
 app.post("/signup", async (req, res) => {
   try {
+    console.log("Signup request body:", req.body); // 🔹 Debug: দেখাবে কি আসছে
     const { username, email, password, bio, avatar } = req.body;
-    if (!username || !email || !password || !bio || !avatar)
+
+    // Input validation
+    if (!username || !email || !password || !bio || !avatar) {
       return res.status(400).json({ message: "Please fill all fields" });
+    }
 
-    const exists = await pool.query("SELECT * FROM users WHERE email=$1", [
-      email,
-    ]);
-    if (exists.rows.length > 0)
+    // Check if user already exists
+    const exists = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+    if (exists.rows.length > 0) {
       return res.status(400).json({ message: "User already exists" });
+    }
 
-    // ✅ Password hashing
+    // Password hashing (bcryptjs recommended for compatibility)
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Insert user into DB
     await pool.query(
       "INSERT INTO users (username, email, password, bio, avatar) VALUES ($1, $2, $3, $4, $5)",
       [username, email, hashedPassword, bio, avatar]
     );
 
+    console.log(`User registered: ${email}`);
     res.json({ message: "Registered successfully" });
+
   } catch (err) {
+    console.error("Signup error:", err); // 🔹 Debug: আসল error
     res.status(500).json({ message: "Error registering user", error: err.message });
   }
 });
-
 // 🔹 Signin
 app.post("/signin", async (req, res) => {
   try {
