@@ -25,7 +25,7 @@ const pool = new Pool({
 // 🔹 Initialize DB
 async function initDB() {
 await pool.query(`
-  DROP TABLE IF EXISTS users (
+  CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
@@ -36,7 +36,7 @@ await pool.query(`
 `);
 
   await pool.query(`
-    DROP TABLE IF EXISTS posts (
+    CREATE TABLE IF NOT EXISTS posts (
       id SERIAL PRIMARY KEY,
       username TEXT NOT NULL,
       avatar TEXT,
