@@ -23,29 +23,10 @@ const pool = new Pool({
 });
 
 // 🔹 Initialize DB
-async function initDB() {
-await pool.query(`
-  DROP TABLE IF EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    bio TEXT,
-    avatar TEXT
-  );
-`);
-
-  await pool.query(`
-    DROP TABLE IF EXISTS posts (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL,
-      avatar TEXT,
-      email TEXT NOT NULL,
-      text TEXT NOT NULL
-    );
-  `);
+async function dropTables() {
+  await pool.query(`DROP TABLE IF EXISTS users;`);
+  await pool.query(`DROP TABLE IF EXISTS posts;`);
 }
-
 // 🔹 Signup
 app.post("/signup", async (req, res) => {
   try {
