@@ -179,10 +179,10 @@ app.get("/users", async (req, res) => {
 });
 
 // 🔹 Delete Post by ID + Email
-app.delete("/post/:email/:id", async (req, res) => {
+app.delete("/post/:email/:index", async (req, res) => {
   try {
-    const { email, id } = req.params;
-    const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
+    const { email, index } = req.params;
+    const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [index, email]);
     
     if (result.rowCount > 0)
       res.json({ message: "Post deleted successfully" });
