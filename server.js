@@ -178,33 +178,42 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// 🔹 Delete Post by ID
-app.delete("/post/:id", async (req, res) => {
+// 🔹 Delete Post by ID + Email
+app.delete("/post/:email/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const result = await pool.query("DELETE FROM posts WHERE id=$1", [id]);
-    if (result.rowCount > 0) res.json({ message: "Post deleted successfully" });
-    else res.status(404).json({ message: "Post not found" });
+    const { email, id } = req.params;
+    const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
+    
+    if (result.rowCount > 0)
+      res.json({ message: "Post deleted successfully" });
+    else
+      res.status(404).json({ message: "Post not found or unauthorized" });
+      
   } catch (err) {
     res.status(500).json({ message: "Error deleting post", error: err.message });
   }
 });
 
-// 🔹 Edit Post by ID
-app.put("/post/:id", async (req, res) => {
+
+// 🔹 Edit Post by ID + Email
+app.put("/post/:email/:id", async (req, res) => {
   try {
-    const { id } = req.params;
+    const { email, id } = req.params;
     const { text } = req.body;
 
-    const result = await pool.query("UPDATE posts SET text=$1 WHERE id=$2 RETURNING *", [text, id]);
-    if (result.rowCount === 0) return res.status(404).json({ message: "Post not found" });
+    const result = await pool.query(
+      "UPDATE posts SET text=$1 WHERE id=$2 AND email=$3 RETURNING *",
+      [text, id, email]
+    );
+
+    if (result.rowCount === 0)
+      return res.status(404).json({ message: "Post not found or unauthorized" });
 
     res.json({ message: "Post updated successfully", post: result.rows[0] });
   } catch (err) {
     res.status(500).json({ message: "Error updating post", error: err.message });
   }
 });
-
 // 🔹 Server check
 app.get("/", (req, res) => res.json({ message: "Backend is working ✅" }));
 
