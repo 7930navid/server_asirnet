@@ -40,8 +40,8 @@ async function initDB() {
       id SERIAL PRIMARY KEY,
       username TEXT NOT NULL,
       email TEXT NOT NULL,
-      text TEXT NOT NULL
-      avatar TEXT NOT NULL,
+      text TEXT NOT NULL,
+      avatar TEXT NOT NULL
     );
   `);
 }
