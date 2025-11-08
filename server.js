@@ -30,8 +30,8 @@ async function initDB() {
       username TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      bio TEXT,
-      avatar TEXT
+      bio TEXT NOT NULL,
+      avatar TEXT NOT NULL
     );
   `);
 
@@ -39,7 +39,7 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS posts (
       id SERIAL PRIMARY KEY,
       username TEXT NOT NULL,
-      avatar TEXT,
+      avatar TEXT NOT NULL,
       email TEXT NOT NULL,
       text TEXT NOT NULL
     );
