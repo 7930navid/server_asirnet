@@ -177,23 +177,21 @@ app.get("/users", async (req, res) => {
     res.status(500).json({ message: "Error fetching users", error: err.message });
   }
 });
-
-// 🔹 Delete Post by ID + Email
-app.delete("/post/:email/:index", async (req, res) => {
+//🔹delete post
+app.delete("/post/:email/:id", async (req, res) => {
   try {
-    const { email, index } = req.params;
-    const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [index, email]);
-    
+    const { email, id } = req.params;
+    const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
+
     if (result.rowCount > 0)
       res.json({ message: "Post deleted successfully" });
     else
       res.status(404).json({ message: "Post not found or unauthorized" });
-      
+
   } catch (err) {
     res.status(500).json({ message: "Error deleting post", error: err.message });
   }
 });
-
 
 // 🔹 Edit Post by ID + Email
 app.put("/post/:email/:id", async (req, res) => {
