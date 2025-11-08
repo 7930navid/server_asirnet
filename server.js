@@ -151,17 +151,24 @@ app.put("/post/:email/:id", async (req, res) => {
 app.delete("/post/:email/:id", async (req, res) => {
   try {
     const { email, id } = req.params;
+
+    // 🧩 Debug logs — console এ request data ও query দেখাবে
+    console.log("Delete request:", req.params);
+    console.log("Query:", "DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
+
     const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
 
-    if (result.rowCount > 0)
+    if (result.rowCount > 0) {
       res.json({ message: "Post deleted successfully" });
-    else
+    } else {
       res.status(404).json({ message: "Post not found or unauthorized" });
+    }
+
   } catch (err) {
+    console.error("Error deleting post:", err);
     res.status(500).json({ message: "Error deleting post", error: err.message });
   }
 });
-
 // 🔹 Edit Profile
 app.put("/editprofile", async (req, res) => {
   try {
