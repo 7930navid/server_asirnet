@@ -173,25 +173,57 @@ app.delete("/post/:email/:id", async (req, res) => {
 app.put("/editprofile", async (req, res) => {
   try {
     const { email, username, password, bio, avatar } = req.body;
+
     if (!email || !username || !password || !bio || !avatar)
       return res.status(400).json({ message: "Please fill all fields" });
 
+    // 🔐 Password hash
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      "UPDATE users SET username=$1, password=$2, bio=$3, avatar=$4 WHERE email=$5 RETURNING *",
-      [username, hashedPassword, bio, avatar, email]
-    );
+    // ✅ Start transaction
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    if (result.rowCount === 0)
-      return res.status(404).json({ message: "User not found" });
+      // 🔹 1. Update user info
+      const userResult = await client.query(
+        `UPDATE users 
+         SET username=$1, password=$2, bio=$3, avatar=$4 
+         WHERE email=$5 
+         RETURNING *`,
+        [username, hashedPassword, bio, avatar, email]
+      );
 
-    res.json({ message: "Profile updated successfully", user: result.rows[0] });
+      if (userResult.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // 🔹 2. Update all posts of that user (if posts table has username/avatar fields)
+      await client.query(
+        `UPDATE posts 
+         SET username=$1, avatar=$2 
+         WHERE email=$3`,
+        [username, avatar, email]
+      );
+
+      await client.query("COMMIT");
+
+      res.json({
+        message: "Profile and posts updated successfully",
+        user: userResult.rows[0]
+      });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
+    console.error("❌ Error updating profile:", err.message);
     res.status(500).json({ message: "Error updating profile", error: err.message });
   }
 });
-
 // 🔹 Delete User + Posts
 app.delete("/deleteuser/:email", async (req, res) => {
   try {
