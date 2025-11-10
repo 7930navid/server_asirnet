@@ -4,7 +4,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const bcrypt = require("bcrypt");
 
-require("dotenv").config();
+
 const { Pool } = require("pg");
 
 const app = express();
