@@ -3,70 +3,101 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const helmet = require("helmet");
 const bcrypt = require("bcrypt");
+
+require("dotenv").config();
 const { Pool } = require("pg");
 
 const app = express();
 app.use(helmet());
 app.use(bodyParser.json());
 
-// ✅ CORS configuration
 app.use(
   cors({
     origin: ["https://7930navid.github.io", "http://localhost:8080"],
   })
 );
 
-// 🔹 PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // Render এর জন্য SSL
+// 🔹 Multi-DB connections
+const usersDB = new Pool({
+  connectionString: process.env.USERS_DB_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
-// 🔹 Initialize DB
-async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      bio TEXT NOT NULL,
-      avatar TEXT NOT NULL
-    );
-  `);
+const postsDB = new Pool({
+  connectionString: process.env.POSTS_DB_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS posts (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL,
-      email TEXT NOT NULL,
-      text TEXT NOT NULL,
-      avatar TEXT NOT NULL
-    );
-  `);
+const interactDB = new Pool({
+  connectionString: process.env.INTERACT_DB_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+// 🔹 Initialize tables
+async function initDB() {
+  try {
+    await usersDB.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        bio TEXT NOT NULL,
+        avatar TEXT NOT NULL
+      );
+    `);
+
+    await postsDB.query(`
+      CREATE TABLE IF NOT EXISTS posts (
+        id SERIAL PRIMARY KEY,
+        username TEXT NOT NULL,
+        email TEXT NOT NULL,
+        text TEXT NOT NULL,
+        avatar TEXT NOT NULL
+      );
+    `);
+
+    await interactDB.query(`
+      CREATE TABLE IF NOT EXISTS likes (
+        id SERIAL PRIMARY KEY,
+        post_id INT NOT NULL,
+        email TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS comments (
+        id SERIAL PRIMARY KEY,
+        post_id INT NOT NULL,
+        email TEXT NOT NULL,
+        comment TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    console.log("✅ All tables initialized successfully!");
+  } catch (err) {
+    console.error("❌ Error initializing tables:", err.message);
+  }
 }
 
 // 🔹 Signup
 app.post("/signup", async (req, res) => {
   try {
-    console.log("Signup request body:", req.body);
     const { username, email, password, bio, avatar } = req.body;
 
     if (!username || !email || !password || !bio || !avatar)
       return res.status(400).json({ message: "Please fill all fields" });
 
-    const exists = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+    const exists = await usersDB.query("SELECT * FROM users WHERE email=$1", [email]);
     if (exists.rows.length > 0)
       return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await pool.query(
+    await usersDB.query(
       "INSERT INTO users (username, email, password, bio, avatar) VALUES ($1, $2, $3, $4, $5)",
       [username, email, hashedPassword, bio, avatar]
     );
 
-    console.log(`User registered: ${email}`);
     res.json({ message: "Registered successfully" });
   } catch (err) {
     console.error("Signup error:", err);
@@ -81,7 +112,7 @@ app.post("/signin", async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: "Please fill all fields" });
 
-    const result = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+    const result = await usersDB.query("SELECT * FROM users WHERE email=$1", [email]);
     if (result.rows.length === 0)
       return res.status(401).json({ message: "Invalid email or password" });
 
@@ -102,11 +133,11 @@ app.post("/post", async (req, res) => {
     const { user, text, avatar } = req.body;
     if (!text) return res.status(400).json({ message: "Please write a post first" });
 
-    const u = await pool.query("SELECT * FROM users WHERE username=$1", [user]);
+    const u = await usersDB.query("SELECT * FROM users WHERE username=$1", [user]);
     if (u.rows.length === 0)
       return res.status(400).json({ message: "User not found" });
 
-    await pool.query(
+    await postsDB.query(
       "INSERT INTO posts (username, email, text, avatar) VALUES ($1, $2, $3, $4)",
       [u.rows[0].username, u.rows[0].email, text, avatar]
     );
@@ -120,7 +151,7 @@ app.post("/post", async (req, res) => {
 // 🔹 Get all posts
 app.get("/post", async (req, res) => {
   try {
-    const posts = await pool.query("SELECT * FROM posts ORDER BY id DESC");
+    const posts = await postsDB.query("SELECT * FROM posts ORDER BY id DESC");
     res.json(posts.rows);
   } catch (err) {
     res.status(500).json({ message: "Error fetching posts", error: err.message });
@@ -133,7 +164,7 @@ app.put("/post/:email/:id", async (req, res) => {
     const { email, id } = req.params;
     const { text } = req.body;
 
-    const result = await pool.query(
+    const result = await postsDB.query(
       "UPDATE posts SET text=$1 WHERE id=$2 AND email=$3 RETURNING *",
       [text, id, email]
     );
@@ -152,11 +183,7 @@ app.delete("/post/:email/:id", async (req, res) => {
   try {
     const { email, id } = req.params;
 
-    // 🧩 Debug logs — console এ request data ও query দেখাবে
-    console.log("Delete request:", req.params);
-    console.log("Query:", "DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
-
-    const result = await pool.query("DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
+    const result = await postsDB.query("DELETE FROM posts WHERE id=$1 AND email=$2", [id, email]);
 
     if (result.rowCount > 0) {
       res.json({ message: "Post deleted successfully" });
@@ -165,10 +192,10 @@ app.delete("/post/:email/:id", async (req, res) => {
     }
 
   } catch (err) {
-    console.error("Error deleting post:", err);
     res.status(500).json({ message: "Error deleting post", error: err.message });
   }
 });
+
 // 🔹 Edit Profile
 app.put("/editprofile", async (req, res) => {
   try {
@@ -177,15 +204,12 @@ app.put("/editprofile", async (req, res) => {
     if (!email || !username || !password || !bio || !avatar)
       return res.status(400).json({ message: "Please fill all fields" });
 
-    // 🔐 Password hash
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Start transaction
-    const client = await pool.connect();
+    const client = await usersDB.connect();
     try {
       await client.query("BEGIN");
 
-      // 🔹 1. Update user info
       const userResult = await client.query(
         `UPDATE users 
          SET username=$1, password=$2, bio=$3, avatar=$4 
@@ -199,11 +223,8 @@ app.put("/editprofile", async (req, res) => {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // 🔹 2. Update all posts of that user (if posts table has username/avatar fields)
-      await client.query(
-        `UPDATE posts 
-         SET username=$1, avatar=$2 
-         WHERE email=$3`,
+      await postsDB.query(
+        `UPDATE posts SET username=$1, avatar=$2 WHERE email=$3`,
         [username, avatar, email]
       );
 
@@ -220,16 +241,16 @@ app.put("/editprofile", async (req, res) => {
       client.release();
     }
   } catch (err) {
-    console.error("❌ Error updating profile:", err.message);
     res.status(500).json({ message: "Error updating profile", error: err.message });
   }
 });
+
 // 🔹 Delete User + Posts
 app.delete("/deleteuser/:email", async (req, res) => {
   try {
     const { email } = req.params;
-    await pool.query("DELETE FROM posts WHERE email=$1", [email]);
-    const result = await pool.query("DELETE FROM users WHERE email=$1", [email]);
+    await postsDB.query("DELETE FROM posts WHERE email=$1", [email]);
+    const result = await usersDB.query("DELETE FROM users WHERE email=$1", [email]);
 
     if (result.rowCount > 0)
       res.json({ message: `${email} has been deleted` });
@@ -243,7 +264,7 @@ app.delete("/deleteuser/:email", async (req, res) => {
 // 🔹 Fetch all users
 app.get("/users", async (req, res) => {
   try {
-    const users = await pool.query("SELECT * FROM users");
+    const users = await usersDB.query("SELECT * FROM users");
     res.json(users.rows.map(u => ({ ...u, password: undefined })));
   } catch (err) {
     res.status(500).json({ message: "Error fetching users", error: err.message });
