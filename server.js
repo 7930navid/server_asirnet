@@ -61,7 +61,8 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS likes (
         id SERIAL PRIMARY KEY,
         post_id INT NOT NULL,
-        email TEXT NOT NULL
+        email TEXT NOT NULL,
+						 reaction TEXT
       );
 
       CREATE TABLE IF NOT EXISTS comments (
