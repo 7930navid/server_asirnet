@@ -271,6 +271,29 @@ app.get("/users", async (req, res) => {
   }
 });
 
+// 🔹 Add Reaction / Like
+app.post("/react", async (req, res) => {
+  try {
+    const { postId, email, reaction } = req.body;
+
+    if (!postId || !email || !reaction) {
+      return res.status(400).json({ message: "Post ID, email and reaction must be required! " });
+    }
+
+    // Reaction save করা
+    const result = await interactDB.query(
+      "INSERT INTO likes (post_id, email) VALUES ($1, $2) RETURNING *",
+      [postId, email]
+    );
+
+
+    res.json({ message: "Reaction saved ", data: result.rows[0] });
+  } catch (err) {
+    console.error("Error saving reaction:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 // 🔹 Server check
 app.get("/", (req, res) => res.json({ message: "Backend is working ✅" }));
 
