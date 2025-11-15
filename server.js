@@ -295,6 +295,23 @@ app.post("/react", async (req, res) => {
   }
 });
 
+// 🔹 Get all reactions for a post
+app.get("/api/react/:postId", async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    const reactions = await interactDB.query(
+      "SELECT * FROM likes WHERE post_id=$1",
+      [postId]
+    );
+
+    res.json(reactions.rows);
+  } catch (err) {
+    console.error("Error fetching reactions:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 // 🔹 Server check
 app.get("/", (req, res) => res.json({ message: "Backend is working ✅" }));
 
