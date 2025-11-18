@@ -294,7 +294,37 @@ app.post("/react", async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+// 🔹 Get reaction + comment quantity for a post
+app.get("/QuanOfReact", async (req, res) => {
+  try {
+    const { postId } = req.query;
 
+    if (!postId) {
+      return res.status(400).json({ message: "postId is required" });
+    }
+
+    // Count reactions
+    const likeResult = await interactDB.query(
+      "SELECT COUNT(*) AS likes FROM likes WHERE post_id=$1",
+      [postId]
+    );
+
+    // Count comments
+    const commentResult = await interactDB.query(
+      "SELECT COUNT(*) AS comments FROM comments WHERE post_id=$1",
+      [postId]
+    );
+
+    res.json({
+      likes: Number(likeResult.rows[0].likes),
+      comments: Number(commentResult.rows[0].comments)
+    });
+
+  } catch (err) {
+    console.error("Error fetching react/comment quantity:", err.message);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
 // 🔹 Get all reactions for a post
 app.get("/api/react/:postId", async (req, res) => {
   try {
