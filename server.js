@@ -342,6 +342,37 @@ app.get("/api/react/:postId", async (req, res) => {
   }
 });
 
+// 🔐 Verify password (for sensitive actions)
+app.post("/verify-password", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Missing data" });
+    }
+
+    const result = await usersDB.query(
+      "SELECT password FROM users WHERE email=$1",
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const hashedPassword = result.rows[0].password;
+    const isValid = await bcrypt.compare(password, hashedPassword);
+
+    if (!isValid) {
+      return res.status(401).json({ message: "Wrong password" });
+    }
+
+    res.json({ message: "Password verified" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // 🔹 Server check
 app.get("/", (req, res) => res.json({ message: "Backend is working ✅" }));
 
